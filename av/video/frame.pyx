@@ -173,19 +173,32 @@ cdef class VideoFrame(Frame):
                 NULL
             )
 
+        # A pile of state to hold the parts of the colourspace details we
+        # aren't changing.
         cdef int *inv_tbl
         cdef int *tbl
-        cdef int *rgbTbl
-        cdef int srcRange, dstRange, brightness, contrast, saturation
+        cdef int src_range, dst_range, brightness, contrast, saturation
         cdef int ret
         with nogil:
-            ret = lib.sws_getColorspaceDetails(self.reformatter.ptr, &inv_tbl, &srcRange, &tbl, &dstRange, &brightness, &contrast, &saturation)
-            if not ret < 0:
+
+            # Grab all of the existing colourspace details, as we're only
+            # going to change a few of them.
+            ret = lib.sws_getColorspaceDetails(self.reformatter.ptr, &inv_tbl, &src_range, &tbl, &dst_range, &brightness, &contrast, &saturation)
+
+            # We can't manage colourspaces in many scenarios, e.g. if the
+            # dst_format is YUV or gray.
+            if ret >= 0:
+
+                # Grab the coefficients for the requested transforms.
+                # The inv_table brings us to linear, and `tbl` to the new space.
                 if src_colorspace != lib.SWS_CS_DEFAULT:
                     inv_tbl = lib.sws_getCoefficients(src_colorspace)
                 if dst_colorspace != lib.SWS_CS_DEFAULT:
                     tbl = lib.sws_getCoefficients(dst_colorspace)
-                lib.sws_setColorspaceDetails(self.reformatter.ptr, inv_tbl, srcRange, tbl, dstRange, brightness, contrast, saturation)
+
+                # Apply!
+                lib.sws_setColorspaceDetails(self.reformatter.ptr, inv_tbl, src_range, tbl, dst_range, brightness, contrast, saturation)
+
 
         # Create a new VideoFrame.
         cdef VideoFrame frame = alloc_video_frame()
